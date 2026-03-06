@@ -373,16 +373,6 @@ Never use password authentication.
 
     ~/.ssh/id_rsa
 
-## Protect API tokens
-
-Do not commit:
-
-    settings.ini
-
-Add to `.gitignore`:
-
-    settings.ini
-
 ## Permissions
 
 Restrict SSH key access:
