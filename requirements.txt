@@ -1,3 +1,5 @@
 ckanapi
 paramiko
 requests
+tenacity
+tqdm
