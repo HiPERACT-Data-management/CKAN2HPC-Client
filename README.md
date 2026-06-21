@@ -406,17 +406,6 @@ Ensure the user has permissions in the specified organization.
 
 ------------------------------------------------------------------------
 
-# Authors
-
-Developed by **PSNC -- Poznan Supercomputing and Networking Center**
-
-Piotr Dzierżak\
-Michał Lawenda
-
-https://psnc.pl
-
-------------------------------------------------------------------------
-
 # License
 
-MIT License
+MIT License — see [LICENSE](LICENSE)
