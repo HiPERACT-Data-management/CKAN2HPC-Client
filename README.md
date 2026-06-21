@@ -1,411 +1,311 @@
 # CKAN2HPC Client
 
-Python client for integrating **CKAN data portals** with **HPC
-environments**.
+**Python client bridging CKAN data portals with HPC storage systems**
 
-The tool enables efficient transfer of datasets between CKAN and HPC
-systems using **SFTP** or **CKAN API** while maintaining
-reproducibility, integrity, and scalable data handling.
+## Why CKAN2HPC?
 
-It is designed primarily for **large scientific datasets** that are
-stored outside CKAN (e.g. HPC storage) but managed through CKAN
-metadata.
+Scientific institutions commonly use **CKAN** as a metadata catalog to describe, discover, and share datasets — while the actual data resides on **HPC storage** (cluster filesystems, object stores, or scientific storage systems). Uploading multi-gigabyte or multi-terabyte datasets directly through the CKAN web interface or API is impractical: it is slow, strains CKAN's storage, and bypasses the high-throughput infrastructure already available on HPC systems.
 
-------------------------------------------------------------------------
+CKAN2HPC Client solves this by acting as a **bridge**:
 
-# Table of Contents
+- it transfers files to HPC storage via **SFTP** using the cluster's own network path,
+- it registers each dataset as a resource in **CKAN** so it remains discoverable through the portal,
+- it lets users retrieve data back through **HTTP** (via CKAN) or **SFTP** (direct).
 
--   Overview
--   Features
--   Architecture
--   Installation
--   Configuration
--   Usage
--   Upload Workflow
--   Download Workflow
--   Command Reference
--   Examples
--   Project Structure
--   Security Notes
--   Troubleshooting
--   Authors
--   License
+This keeps large binaries off CKAN while preserving full metadata management, access control, and reproducibility.
+
+### Current scope
+
+CKAN2HPC Client targets institutions that run a standard CKAN instance alongside an HPC cluster accessible via SSH/SFTP. Transfer is handled by **Paramiko** (SFTP) and the **ckanapi** Python client. SHA-256 checksums are embedded in remote filenames for post-download integrity verification. Automatic retry with exponential back-off handles transient network issues on both upload and download paths.
 
 ------------------------------------------------------------------------
 
-# Overview
+## Features
 
-Many scientific infrastructures use **CKAN** as a metadata catalog while
-storing actual datasets in external storage such as:
+### Data upload
 
--   HPC clusters
--   scientific storage systems
--   large distributed filesystems
+| Feature | Detail |
+|---|---|
+| File and directory upload | Directories are automatically compressed to a ZIP archive before transfer |
+| Transfer protocols | SFTP (recommended for large files) or CKAN API direct upload |
+| Integrity | SHA-256 checksum computed locally and embedded in the remote filename |
+| Deduplication | Remote filename `<sha256>_<name>` prevents silent overwrites |
+| Dataset management | Dataset created automatically if it does not exist; organization fallback if configured org is unavailable |
+| Progress reporting | Real-time transfer progress bar via `tqdm` |
+| Retry | Up to 3 attempts with exponential back-off on SFTP failures |
 
-Uploading large files directly through CKAN is inefficient.
+### Data download
 
-This client solves that problem by:
+| Mode | Description |
+|---|---|
+| `dataset` | Downloads all resources belonging to a CKAN dataset |
+| `resource` | Downloads a single resource by its CKAN resource ID |
+| `sftp` | Downloads a file directly from HPC storage via SFTP |
 
--   uploading files to **HPC storage via SFTP**
--   registering dataset resources in **CKAN**
--   enabling downloads via **HTTP or SFTP**
+All download modes display a progress bar and automatically verify the SHA-256 checksum when the filename follows the `<sha256>_<name>` convention.
 
-The tool acts as a **bridge between CKAN metadata and HPC storage**.
+### Security
 
-------------------------------------------------------------------------
-
-# Features
-
-## Data Upload
-
--   Upload **files or directories**
--   Automatic **directory compression (ZIP)**
--   Upload using:
-    -   **SFTP (recommended for large files)**
-    -   **CKAN API**
--   Automatic dataset creation
--   Automatic organization fallback
--   SHA256 checksum calculation
--   Unique remote filenames
-
-## Data Download
-
--   Download entire **CKAN datasets**
--   Download individual **resources**
--   Download directly from **SFTP storage**
-
-<img src="docs/upload.png">
-
-
-<img src="docs/download.png">
-
-
-## Data Integrity
-
-SHA256 checksum is used for:
-
--   file naming
--   collision prevention
--   reproducibility
-
-## HPC-Friendly
-
--   avoids storing large binaries in CKAN
--   supports external storage systems
--   scalable for large datasets
+- SSH key authentication — no passwords stored or transmitted
+- Host key verification via system `known_hosts` (rejects unknown hosts)
+- CKAN API token authentication for all metadata operations
+- `settings.ini` is excluded from version control by `.gitignore`
 
 ------------------------------------------------------------------------
 
-# Architecture
+## Architecture
 
-            +------------------+
-            |      User        |
-            +--------+---------+
-                     |
-                     | CLI
-                     v
-            +------------------+
-            |  CKAN2HPC Client |
-            +--------+---------+
-                     |
-           +---------+-----------+
-           |                     |
-           v                     v
+```
+                    +-------------------------+
+                    |         User            |
+                    +----------+--------------+
+                               |
+                               | CLI
+                               v
+                    +----------+--------------+
+                    |    CKAN2HPC Client      |
+                    +----------+--------------+
+                               |
+              +----------------+----------------+
+              |                                 |
+              v                                 v
+   +----------+----------+           +----------+----------+
+   |         CKAN        |           |     HPC Storage     |
+   |   (metadata portal) |           |  (files via SFTP)   |
+   +---------------------+           +---------------------+
+```
 
-    +--------------+      +--------------+
-    |     CKAN     |      |  HPC Storage |
-    | (metadata)   |      |   (files)    |
-    +--------------+      +--------------+
+### Upload flow
 
-## Upload Flow
+```
+User → ckan_upload.py
+  1. Validate input path
+  2. ZIP directory (if needed)
+  3. Compute SHA-256 checksum
+  4. Upload file to HPC via SFTP  →  ckan-pub/<sha256>_<filename>
+  5. Create CKAN dataset (if missing)
+  6. Register CKAN resource with URL pointing to HPC storage
+```
 
-    User → Upload Client → SFTP → HPC Storage
-                          ↓
-                       CKAN API
-                          ↓
-                   CKAN Resource URL
+### Download flow
 
-## Download Flow
-
-    User → Download Client → CKAN API
-                             ↓
-                        Resource URL
-                             ↓
-                 HTTP Download or SFTP
-
-------------------------------------------------------------------------
-
-# Installation
-
-## Requirements
-
--   Python **3.9+**
--   CKAN API access
--   SSH key access to SFTP server
-
-Install dependencies:
-
-``` bash
-pip install ckanapi paramiko requests
+```
+User → ckan_download.py
+  1. Query CKAN API for resource metadata
+  2. Download file via HTTP (from CKAN URL) or SFTP (direct)
+  3. Verify SHA-256 checksum against filename
 ```
 
 ------------------------------------------------------------------------
 
-# Configuration
+## Prerequisites
 
-Create a configuration file `settings.ini`.
+- Python **3.9** or later
+- A running **CKAN** instance with API access
+- An **SSH key pair** with the public key authorized on the SFTP server
+- The SFTP server added to your local `~/.ssh/known_hosts`
 
-Example:
+### Adding the server to known_hosts
 
-``` ini
+CKAN2HPC Client uses strict host key verification. Before first use, add the server fingerprint:
+
+```bash
+ssh-keyscan -p 22 <server_address> >> ~/.ssh/known_hosts
+```
+
+Replace `<server_address>` with the value of `server_address` in your `settings.ini`.
+
+------------------------------------------------------------------------
+
+## Installation
+
+```bash
+git clone https://github.com/HiPERACT-Data-management/CKAN2HPC-Client.git
+cd CKAN2HPC-Client
+pip install -r requirements.txt
+```
+
+------------------------------------------------------------------------
+
+## Configuration
+
+Copy the example configuration and fill in your values:
+
+```bash
+cp settings.ini.example settings.ini   # or create settings.ini directly
+```
+
+`settings.ini` is excluded from version control — never commit real credentials.
+
+### settings.ini format
+
+```ini
 [ckan]
 url=https://ckan.example.com
-organization=EXAMPLARY_ORGANIZATION
+organization=MY_ORGANIZATION
 api_token=CKAN_API_TOKEN
+private=true
 
 [sftp]
-server_address=ckan.example.com
+server_address=hpc.example.com
 server_web_port=8443
-username=example_user
+username=hpc_user
 private_key=/home/user/.ssh/id_rsa
 ```
 
-## Configuration fields
+### Configuration reference
 
-### CKAN
+#### [ckan]
 
-  Parameter      Description
-  -------------- -----------------------------------------
-  url            CKAN instance URL
-  organization   organization used for dataset ownership
-  api_token      CKAN API key
+| Parameter | Description | Required |
+|---|---|---|
+| `url` | Base URL of the CKAN instance | Yes |
+| `organization` | Default owner organization for new datasets | Yes |
+| `api_token` | CKAN API key with write access | Yes |
+| `private` | Create new datasets as private (`true` / `false`, default `true`) | No |
 
-### SFTP
+#### [sftp]
 
-  Parameter         Description
-  ----------------- -----------------------------------
-  server_address    SFTP host
-  server_web_port   HTTP access port for stored files
-  username          SFTP username
-  private_key       SSH private key path
-
-------------------------------------------------------------------------
-
-# Usage
-
-The client consists of two scripts:
-
-    ckan_upload.py
-    ckan_download.py
+| Parameter | Description | Required |
+|---|---|---|
+| `server_address` | SFTP hostname | Yes |
+| `server_web_port` | HTTP port for web-accessible file URLs | Yes |
+| `username` | SFTP login username | Yes |
+| `private_key` | Absolute path to SSH private key | Yes |
 
 ------------------------------------------------------------------------
 
-# Upload Workflow
+## Usage
 
-Uploading follows these steps:
+### Upload
 
-### 1. Input validation
+Upload a single file to dataset `climate-2024`:
 
-The script checks:
+```bash
+python ckan_upload.py -f data.csv -d climate-2024
+```
 
--   file existence
--   dataset name
--   protocol
+Upload an entire directory (automatically zipped):
 
-### 2. Directory handling
+```bash
+python ckan_upload.py -f ./results/ -d climate-2024
+```
 
-If the input path is a directory:
+Upload via CKAN API instead of SFTP (smaller files only):
 
-    directory → ZIP archive
+```bash
+python ckan_upload.py -f data.csv -d climate-2024 -p curl
+```
 
-### 3. SHA256 checksum
+#### Upload arguments
 
-File is hashed:
+| Argument | Description | Default |
+|---|---|---|
+| `-f` | File or directory path to upload | — |
+| `-d` | Target dataset name (sanitized to a CKAN-compatible slug) | — |
+| `-p` | Transfer protocol: `sftp` or `curl` | `sftp` |
 
-    SHA256(file)
+### Download
 
-Example:
+Download all resources in a dataset:
 
-    original: data.csv
+```bash
+python ckan_download.py -m dataset -r climate-2024 -d ./output/
+```
 
-    stored as:
-    b1946ac92492d2347c6235b4d2611184_data.csv
+Download a single resource by ID:
 
-### 4. Upload via SFTP
+```bash
+python ckan_download.py -m resource -r <resource-uuid> -d ./output/
+```
 
-File uploaded to:
+Download a file directly from HPC storage via SFTP:
 
-    SFTP: ckan-pub/
+```bash
+python ckan_download.py -m sftp -r <sha256>_data.csv -d ./output/
+```
 
-### 5. Resource registration
+#### Download arguments
 
-CKAN resource created:
-
-    https://server:port/~user/SHA256_filename
+| Argument | Description | Default |
+|---|---|---|
+| `-m` | Download mode: `dataset`, `resource`, or `sftp` | — |
+| `-r` | Dataset name, resource UUID, or SFTP filename | — |
+| `-d` | Output directory | `.` (current directory) |
 
 ------------------------------------------------------------------------
 
-# Download Workflow
+## Data integrity
 
-The download client supports three modes.
+Every uploaded file is identified by its SHA-256 hash, which is embedded in the remote filename:
 
-## Dataset download
-
-Downloads **all resources in a dataset**.
-
-    CKAN → resource list → download each file
-
-Command:
-
-``` bash
-python ckan_download.py -m dataset -r DATASET_NAME
+```
+original:  results.csv
+stored as: b1946ac92492d2347c6235b4d2611184...a7f_results.csv
 ```
 
-## Resource download
-
-Downloads a **single resource**.
-
-    CKAN → resource metadata → download file
-
-Command:
-
-``` bash
-python ckan_download.py -m resource -r RESOURCE_ID
-```
-
-## SFTP download
-
-Downloads directly from **SFTP storage**.
-
-    SFTP → file transfer
-
-Command:
-
-``` bash
-python ckan_download.py -m sftp -r FILE_NAME
-```
+On download, if the filename matches the `<sha256>_<name>` pattern, the client recomputes the hash of the downloaded bytes and logs a warning if they do not match. This provides end-to-end integrity verification without any additional metadata lookups.
 
 ------------------------------------------------------------------------
 
-# Command Reference
+## Security notes
 
-## Upload
+| Topic | Recommendation |
+|---|---|
+| SSH authentication | Use key-based authentication only; disable password auth on the server |
+| Key permissions | `chmod 600 ~/.ssh/id_rsa` |
+| Known hosts | Always verify the server fingerprint before first connection (`ssh-keyscan`) |
+| API token | Store the token in `settings.ini` only; never hard-code it or commit it |
+| Dataset visibility | New datasets are created as private by default (`private=true` in config) |
 
-Upload file:
+------------------------------------------------------------------------
 
-``` bash
-python ckan_upload.py -f data.csv -d climate
+## Troubleshooting
+
+### `settings.ini does not exist`
+
+Create `settings.ini` in the same directory as the scripts. See [Configuration](#configuration).
+
+### `Server key not found in known_hosts` (SFTP connection refused)
+
+Run `ssh-keyscan -p 22 <server_address> >> ~/.ssh/known_hosts` and retry.
+
+### CKAN authentication error
+
+Verify that `api_token` in `settings.ini` is valid and has write access to the target organization.
+
+### Organization not found
+
+If the configured organization is not accessible, the client automatically falls back to the first organization the API token has access to. Check the log output to confirm which organization was used.
+
+### SFTP upload or download fails after retries
+
+- Confirm `server_address` and `username` in `settings.ini`
+- Confirm the private key path and permissions (`chmod 600`)
+- Confirm the remote `ckan-pub/` directory exists and is writable
+
+------------------------------------------------------------------------
+
+## Project structure
+
 ```
-
-Upload directory:
-
-``` bash
-python ckan_upload.py -f ./data -d climate
-```
-
-Upload via CKAN API:
-
-``` bash
-python ckan_upload.py -f data.csv -d climate -p curl
-```
-
-## Download
-
-Download dataset:
-
-``` bash
-python ckan_download.py -m dataset -r climate
-```
-
-Download resource:
-
-``` bash
-python ckan_download.py -m resource -r RESOURCE_ID
-```
-
-Download via SFTP:
-
-``` bash
-python ckan_download.py -m sftp -r FILE_NAME
+CKAN2HPC-Client/
+├── ckan_upload.py      # Upload CLI
+├── ckan_download.py    # Download CLI
+├── config.py           # Configuration loader
+├── settings.ini        # Local configuration (not committed)
+├── requirements.txt    # Python dependencies
+├── LICENSE
+├── docs/
+│   ├── upload.png
+│   └── download.png
+└── README.md
 ```
 
 ------------------------------------------------------------------------
 
-# Command Line Arguments
+## License
 
-## Upload script
+MIT License — Copyright (c) 2021-2026 Marcin Lawenda, Poznan Supercomputing and Networking Center
 
-  Argument   Description
-  ---------- ------------------------------------
-  `-f`       file or directory path
-  `-d`       dataset name
-  `-p`       transfer protocol (`sftp`, `curl`)
-
-## Download script
-
-  Argument   Description
-  ---------- -----------------------------------------------
-  `-m`       download mode (`dataset`, `resource`, `sftp`)
-  `-r`       dataset name, resource id, or filename
-  `-d`       output directory
-
-------------------------------------------------------------------------
-
-# Project Structure
-
-    .
-    ├── ckan_upload.py
-    ├── ckan_download.py
-    ├── config.py
-    ├── settings.ini
-    ├── docs/
-    │   ├── upload.png
-    │   └── download.png
-    └── README.md
-
-------------------------------------------------------------------------
-
-# Security Notes
-
-## Use SSH keys
-
-Never use password authentication.
-
-    ~/.ssh/id_rsa
-
-## Permissions
-
-Restrict SSH key access:
-
-``` bash
-chmod 600 ~/.ssh/id_rsa
-```
-
-------------------------------------------------------------------------
-
-# Troubleshooting
-
-## Authentication error
-
-Check:
-
--   CKAN API token
--   SSH private key
-
-## SFTP upload fails
-
-Verify:
-
--   SFTP host
--   username
--   SSH key permissions
-
-## Dataset creation error
-
-Ensure the user has permissions in the specified organization.
-
-------------------------------------------------------------------------
-
-# License
-
-MIT License — see [LICENSE](LICENSE)
+See [LICENSE](LICENSE) for the full text.
