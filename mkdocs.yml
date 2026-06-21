@@ -1,0 +1,65 @@
+site_name: CKAN2HPC Client
+site_description: Python client bridging CKAN data portals with HPC storage systems
+site_author: Marcin Lawenda
+repo_url: https://github.com/HiPERACT-Data-management/CKAN2HPC-Client
+repo_name: CKAN2HPC-Client
+copyright: "Copyright &copy; 2021-2026 Marcin Lawenda, Poznan Supercomputing and Networking Center"
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  font:
+    text: Roboto
+    code: Roboto Mono
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - toc.follow
+    - search.highlight
+    - search.suggest
+    - content.code.copy
+
+nav:
+  - Home: index.md
+  - Installation: installation.md
+  - Configuration: configuration.md
+  - User Guide:
+      - Uploading Data: user-guide/upload.md
+      - Downloading Data: user-guide/download.md
+      - Data Integrity: user-guide/integrity.md
+  - Security: security.md
+  - Developer Guide:
+      - Architecture: developer/architecture.md
+      - Module Reference: developer/modules.md
+      - Contributing: developer/contributing.md
+
+markdown_extensions:
+  - admonition
+  - tables
+  - attr_list
+  - def_list
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.superfences
+  - pymdownx.details
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.inlinehilite
+  - toc:
+      permalink: true
