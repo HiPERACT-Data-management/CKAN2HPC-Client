@@ -306,6 +306,6 @@ CKAN2HPC-Client/
 
 ## License
 
-MIT License — Copyright (c) 2021-2026 Marcin Lawenda, Poznan Supercomputing and Networking Center
+MIT License — see [LICENSE](LICENSE).
 
-See [LICENSE](LICENSE) for the full text.
+Copyright (c) 2021-2026 Marcin Lawenda, Poznan Supercomputing and Networking Center
