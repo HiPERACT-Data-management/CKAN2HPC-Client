@@ -1,3 +1,0 @@
-configparser
-ckanapi
-paramiko

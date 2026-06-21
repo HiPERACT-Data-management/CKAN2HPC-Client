@@ -16,7 +16,8 @@ def sftp_download(outfile, remote_file, sftp_user, keyfile):
     print("Downloading via SFTP")
 
     ssh = paramiko.SSHClient()
-    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    ssh.load_system_host_keys()
+    ssh.set_missing_host_key_policy(paramiko.RejectPolicy())
     ssh.connect(
         hostname=config.sftp_address,
         username=sftp_user,

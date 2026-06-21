@@ -41,7 +41,8 @@ def sftp_upload(local_file, remote_name, sftp_user, keyfile):
     print("Uploading via SFTP")
 
     ssh = paramiko.SSHClient()
-    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    ssh.load_system_host_keys()
+    ssh.set_missing_host_key_policy(paramiko.RejectPolicy())
     ssh.connect(
         hostname=config.sftp_address,
         username=sftp_user,
@@ -149,7 +150,7 @@ try:
 except NotFound:
     ckan.action.package_create(
         name=args.dataset,
-        owner_org=config.ckan_organization.lower(),
+        owner_org=owner_org,
         private=True
     )
 
