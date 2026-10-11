@@ -1,0 +1,25 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata from this file."
+type: software
+title: "CKAN2HPC-Client"
+abstract: >-
+  Python client that transfers large scientific datasets between CKAN data
+  portals and HPC storage over SFTP and the CKAN API, with SHA-256 integrity
+  checks, compression, deduplication and retry with exponential back-off.
+authors:
+  - family-names: Lawenda
+    given-names: Marcin
+    orcid: "https://orcid.org/0000-0003-4844-3655"
+    affiliation: "Poznan Supercomputing and Networking Center"
+    email: lawenda@man.poznan.pl
+  - family-names: Dzierżak
+    given-names: Piotr
+repository-code: "https://github.com/HiPERACT-Data-management/CKAN2HPC-Client"
+license: MIT
+version: 0.1.0
+date-released: "2026-10-11"
+keywords:
+  - ckan
+  - hpc
+  - data transfer
+  - sftp
