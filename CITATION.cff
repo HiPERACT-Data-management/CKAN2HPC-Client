@@ -16,6 +16,7 @@ authors:
     given-names: Piotr
 repository-code: "https://github.com/HiPERACT-Data-management/CKAN2HPC-Client"
 license: MIT
+doi: 10.5281/zenodo.23299544
 version: 0.1.0
 date-released: "2026-10-11"
 keywords:
